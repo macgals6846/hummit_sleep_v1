@@ -1,10 +1,4 @@
 /* Control with a touch pad playing MP3 files from SD Card
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <string.h>
 #include "freertos/FreeRTOS.h"
@@ -30,10 +24,13 @@
 #include "periph_adc_button.h"
 #include "board.h"
 
+
+/////////// SD Card API /////////////////////////////////////
 #include "sdcard_list.h"
 #include "sdcard_scan.h"
 
-static const char *TAG = "SDCARD_MP3_CONTROL_EXAMPLE";
+
+static const char *TAG = "hummit_sleep";
 
 audio_pipeline_handle_t pipeline;
 audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_handle;
@@ -120,8 +117,8 @@ void sdcard_url_save_cb(void *user_data, char *url)
 
 void app_main(void)
 {
-    esp_log_level_set("*", ESP_LOG_WARN);
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    //esp_log_level_set("*", ESP_LOG_WARN);
+    //esp_log_level_set(TAG, ESP_LOG_INFO);
 
     ESP_LOGI(TAG, "[1.0] Initialize peripherals management");
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
@@ -129,7 +126,9 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[1.1] Initialize and start peripherals");
     audio_board_key_init(set);
-    audio_board_sdcard_init(set, SD_MODE_1_LINE);
+    ESP_LOGI(TAG, "[1.1A] Initialize and start peripherals");
+    audio_board_sdcard_init(set, SD_MODE_SPI);
+    ESP_LOGI(TAG, "[1.1B] Initialize and start peripherals");
 
     ESP_LOGI(TAG, "[1.2] Set up a sdcard playlist and scan sdcard music save to it");
     sdcard_list_create(&sdcard_list_handle);
@@ -167,6 +166,7 @@ void app_main(void)
        so resample filter has been added to convert audio data to other rates accepted by the chip.
        You can resample the data to 16 kHz or 48 kHz.
     */
+
     ESP_LOGI(TAG, "[4.3] Create resample filter");
     rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
     rsp_handle = rsp_filter_init(&rsp_cfg);
@@ -201,9 +201,9 @@ void app_main(void)
     ESP_LOGW(TAG, "      [Vol-] or [Vol+] to adjust volume.");
 
     while (1) {
-        /* Handle event interface messages from pipeline
-           to set music info and to advance to the next song
-        */
+        // Handle event interface messages from pipeline
+        //   to set music info and to advance to the next song
+
         audio_event_iface_msg_t msg;
         esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
         if (ret != ESP_OK) {
@@ -230,10 +230,10 @@ void app_main(void)
                     ESP_LOGI(TAG, "[ * ] Finished, advancing to the next song");
                     sdcard_list_next(sdcard_list_handle, 1, &url);
                     ESP_LOGW(TAG, "URL: %s", url);
-                    /* In previous versions, audio_pipeline_terminal() was called here. It will close all the element task and when we use
-                     * the pipeline next time, all the tasks should be restarted again. It wastes too much time when we switch to another music.
-                     * So we use another method to achieve this as below.
-                     */
+                    // In previous versions, audio_pipeline_terminal() was called here. It will close all the element task and when we use
+                    // the pipeline next time, all the tasks should be restarted again. It wastes too much time when we switch to another music.
+                    // So we use another method to achieve this as below.
+                    
                     audio_element_set_uri(fatfs_stream_reader, url);
                     audio_pipeline_reset_ringbuffer(pipeline);
                     audio_pipeline_reset_elements(pipeline);
@@ -254,17 +254,17 @@ void app_main(void)
     audio_pipeline_unregister(pipeline, i2s_stream_writer);
     audio_pipeline_unregister(pipeline, rsp_handle);
 
-    /* Terminate the pipeline before removing the listener */
+    // Terminate the pipeline before removing the listener 
     audio_pipeline_remove_listener(pipeline);
 
-    /* Stop all peripherals before removing the listener */
+    // Stop all peripherals before removing the listener 
     esp_periph_set_stop_all(set);
     audio_event_iface_remove_listener(esp_periph_set_get_event_iface(set), evt);
 
-    /* Make sure audio_pipeline_remove_listener & audio_event_iface_remove_listener are called before destroying event_iface */
+    // Make sure audio_pipeline_remove_listener & audio_event_iface_remove_listener are called before destroying event_iface 
     audio_event_iface_destroy(evt);
 
-    /* Release all resources */
+    // Release all resources
     sdcard_list_destroy(sdcard_list_handle);
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_writer);
@@ -272,4 +272,5 @@ void app_main(void)
     audio_element_deinit(rsp_handle);
     periph_service_destroy(input_ser);
     esp_periph_set_destroy(set);
+
 }
