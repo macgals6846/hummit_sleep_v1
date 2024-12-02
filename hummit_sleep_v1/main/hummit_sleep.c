@@ -140,11 +140,19 @@ void app_main(void)
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_DECODE, AUDIO_HAL_CTRL_START);
 
     ESP_LOGI(TAG, "[ 3 ] Create and start input key service");
-    input_key_service_info_t input_key_info[] = INPUT_KEY_DEFAULT_INFO();
+    //input_key_service_info_t input_key_info[] = INPUT_KEY_DEFAULT_INFO();
+    input_key_service_info_t input_key_info_custom[] = {
+        {
+            .type = PERIPH_ID_BUTTON,
+            .user_id = INPUT_KEY_USER_ID_PLAY,
+            .act_id = PERIPH_BUTTON_PRESSED,
+            //.pin = BUTTON_PLAY_ID,
+        },
+    };
     input_key_service_cfg_t input_cfg = INPUT_KEY_SERVICE_DEFAULT_CONFIG();
     input_cfg.handle = set;
     periph_service_handle_t input_ser = input_key_service_create(&input_cfg);
-    input_key_service_add_key(input_ser, input_key_info, INPUT_KEY_NUM);
+    input_key_service_add_key(input_ser, input_key_info_custom, 1);
     periph_service_set_callback(input_ser, input_key_service_cb, (void *)board_handle);
 
     ESP_LOGI(TAG, "[4.0] Create audio pipeline for playback");
@@ -156,7 +164,7 @@ void app_main(void)
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
-    i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2);
+    i2s_stream_set_clk(i2s_stream_writer, 44100, 16, 2);
 
     ESP_LOGI(TAG, "[4.2] Create mp3 decoder to decode mp3 file");
     mp3_decoder_cfg_t mp3_cfg = DEFAULT_MP3_DECODER_CONFIG();
@@ -165,12 +173,12 @@ void app_main(void)
     /* ZL38063 audio chip on board of ESP32-LyraTD-MSC does not support 44.1 kHz sampling frequency,
        so resample filter has been added to convert audio data to other rates accepted by the chip.
        You can resample the data to 16 kHz or 48 kHz.
-    */
+    
 
     ESP_LOGI(TAG, "[4.3] Create resample filter");
     rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
     rsp_handle = rsp_filter_init(&rsp_cfg);
-
+    */
     ESP_LOGI(TAG, "[4.4] Create fatfs stream to read data from sdcard");
     char *url = NULL;
     sdcard_list_current(sdcard_list_handle, &url);
@@ -182,12 +190,12 @@ void app_main(void)
     ESP_LOGI(TAG, "[4.5] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, fatfs_stream_reader, "file");
     audio_pipeline_register(pipeline, mp3_decoder, "mp3");
-    audio_pipeline_register(pipeline, rsp_handle, "filter");
+    //audio_pipeline_register(pipeline, rsp_handle, "filter");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s");
 
     ESP_LOGI(TAG, "[4.6] Link it together [sdcard]-->fatfs_stream-->mp3_decoder-->resample-->i2s_stream-->[codec_chip]");
-    const char *link_tag[4] = {"file", "mp3", "filter", "i2s"};
-    audio_pipeline_link(pipeline, &link_tag[0], 4);
+    const char *link_tag[3] = {"file", "mp3", "i2s"};
+    audio_pipeline_link(pipeline, &link_tag[0], 3);
 
     ESP_LOGI(TAG, "[5.0] Set up  event listener");
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
@@ -199,6 +207,26 @@ void app_main(void)
     ESP_LOGW(TAG, "[ 6 ] Press the keys to control music player:");
     ESP_LOGW(TAG, "      [Play] to start, pause and resume, [Set] next song.");
     ESP_LOGW(TAG, "      [Vol-] or [Vol+] to adjust volume.");
+
+    ESP_LOGI(TAG, "[ * ] [Play] input key event");
+    audio_element_state_t el_state = audio_element_get_state(i2s_stream_writer);
+    switch (el_state) {
+        case AEL_STATE_INIT :
+            ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
+            audio_pipeline_run(pipeline);
+            break;
+        case AEL_STATE_RUNNING :
+            ESP_LOGI(TAG, "[ * ] Pausing audio pipeline");
+            audio_pipeline_pause(pipeline);
+            break;
+        case AEL_STATE_PAUSED :
+            ESP_LOGI(TAG, "[ * ] Resuming audio pipeline");
+            audio_pipeline_resume(pipeline);
+            break;
+        default :
+            ESP_LOGI(TAG, "[ * ] Not supported state %d", el_state);
+    }
+
 
     while (1) {
         // Handle event interface messages from pipeline
@@ -219,7 +247,7 @@ void app_main(void)
                 ESP_LOGI(TAG, "[ * ] Received music info from mp3 decoder, sample_rates=%d, bits=%d, ch=%d",
                          music_info.sample_rates, music_info.bits, music_info.channels);
                 audio_element_setinfo(i2s_stream_writer, &music_info);
-                rsp_filter_set_src_info(rsp_handle, music_info.sample_rates, music_info.channels);
+                //rsp_filter_set_src_info(rsp_handle, music_info.sample_rates, music_info.channels);
                 continue;
             }
             // Advance to the next song when previous finishes
@@ -252,7 +280,7 @@ void app_main(void)
 
     audio_pipeline_unregister(pipeline, mp3_decoder);
     audio_pipeline_unregister(pipeline, i2s_stream_writer);
-    audio_pipeline_unregister(pipeline, rsp_handle);
+    //audio_pipeline_unregister(pipeline, rsp_handle);
 
     // Terminate the pipeline before removing the listener 
     audio_pipeline_remove_listener(pipeline);
@@ -269,7 +297,7 @@ void app_main(void)
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_writer);
     audio_element_deinit(mp3_decoder);
-    audio_element_deinit(rsp_handle);
+    //audio_element_deinit(rsp_handle);
     periph_service_destroy(input_ser);
     esp_periph_set_destroy(set);
 

@@ -24,10 +24,12 @@
 
 #include "esp_log.h"
 #include "board.h"
+#include "board_def.h"
 #include "audio_mem.h"
 
 #include "periph_sdcard.h"
 #include "periph_adc_button.h"
+#include "periph_button.h"
 
 static const char *TAG = "AUDIO_BOARD";
 
@@ -56,7 +58,7 @@ audio_hal_handle_t audio_board_codec_init(void)
 
 esp_err_t audio_board_key_init(esp_periph_set_handle_t set)
 {
-    esp_err_t ret = ESP_OK;
+    /*esp_err_t ret = ESP_OK;
     periph_adc_button_cfg_t adc_btn_cfg = PERIPH_ADC_BUTTON_DEFAULT_CONFIG();
     adc_arr_t adc_btn_tag = ADC_DEFAULT_ARR();
     adc_btn_tag.adc_ch = ADC1_CHANNEL_0; // GPIO36
@@ -68,7 +70,24 @@ esp_err_t audio_board_key_init(esp_periph_set_handle_t set)
     esp_periph_handle_t adc_btn_handle = periph_adc_button_init(&adc_btn_cfg);
     AUDIO_NULL_CHECK(TAG, adc_btn_handle, return ESP_ERR_ADF_MEMORY_LACK);
     ret = esp_periph_start(set, adc_btn_handle);
+    return ret;*/
+
+    esp_err_t ret = ESP_OK;
+
+    // Configure button
+    periph_button_cfg_t button_cfg = {
+        .gpio_mask = 1ULL << BUTTON_PLAY_ID, // Set GPIO pin for button
+        .long_press_time_ms = 2000,               // Example: 2 seconds for long press
+        //.hold_press_time = 1000,               // Example: 1 second for repeat press (hold)
+        //.active_level = 0,                     // Set active level to 0 for normally zero (active low)
+    };
+    // Initialize button peripheral
+    esp_periph_handle_t button_periph = periph_button_init(&button_cfg);
+    // Add button peripheral to the peripheral set
+    esp_periph_start(set, button_periph);
+
     return ret;
+
 }
 
 esp_err_t audio_board_sdcard_init(esp_periph_set_handle_t set, periph_sdcard_mode_t mode)
