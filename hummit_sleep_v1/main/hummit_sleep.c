@@ -60,6 +60,12 @@ audio_element_handle_t i2s_stream_writer, mp3_decoder, fatfs_stream_reader, rsp_
 playlist_operator_handle_t sdcard_list_handle = NULL;
 
 ///////////////////functions////////////////////////////
+static void music_stop(){
+    ESP_LOGI(TAG, "[ 7 ] Stop audio_pipeline");
+    if (audio_pipeline_pause(pipeline) != ESP_OK) {
+        ESP_LOGI(TAG, "Failed to pause pipeline");
+    }
+}
 static void music_next_ifnot_state_initial(){
     audio_element_state_t el_state = audio_element_get_state(i2s_stream_writer);
     if(el_state==AEL_STATE_INIT){
@@ -94,6 +100,18 @@ static void button_event_multiple_cb(void *arg, void *data)
     motor_cmd(motor_program_2);
     music_next_ifnot_state_initial();
 }
+static void button_event_single_cb(void *arg, void *data)
+{
+    iot_button_print_event((button_handle_t)arg);
+    //motor_cmd(motor_program_2);
+    //music_next_ifnot_state_initial();
+}
+static void button_event_longpress_cb(void *arg, void *data)
+{
+    iot_button_print_event((button_handle_t)arg);
+    motor_cmd(motor_stop);
+    music_stop();
+}
 void hummit_button_init(uint32_t button_num)
 {
     button_config_t btn_cfg = {
@@ -112,14 +130,14 @@ void hummit_button_init(uint32_t button_num)
     //err |= iot_button_register_cb(btn, BUTTON_PRESS_UP, button_event_cb, NULL);
     //err |= iot_button_register_cb(btn, BUTTON_PRESS_REPEAT, button_event_cb, NULL);
     //err |= iot_button_register_cb(btn, BUTTON_PRESS_REPEAT_DONE, button_event_cb, NULL);
-    //err |= iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, button_event_cb, NULL);
-    esp_err_t err = iot_button_register_cb(btn, BUTTON_DOUBLE_CLICK, button_event_double_cb, NULL);
+    esp_err_t err = iot_button_register_cb(btn, BUTTON_SINGLE_CLICK, button_event_single_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_DOUBLE_CLICK, button_event_double_cb, NULL);
     button_event_config_t btn_evt_cfg = {
         .event = BUTTON_MULTIPLE_CLICK,
         .event_data.multiple_clicks.clicks = 3,
     };
     err |= iot_button_register_event_cb(btn, btn_evt_cfg, button_event_multiple_cb, NULL);
-    //err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, button_event_cb, NULL);
+    err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_START, button_event_longpress_cb, NULL);
     //err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_HOLD, button_event_cb, NULL);
     //err |= iot_button_register_cb(btn, BUTTON_LONG_PRESS_UP, button_event_cb, NULL);
     //err |= iot_button_register_cb(btn, BUTTON_PRESS_END, button_event_cb, NULL);
@@ -774,11 +792,11 @@ void ledc_motor_init(){
 
 void app_main(void)
 {
-    esp_log_level_set("MP3_DECODER", ESP_LOG_VERBOSE);
-    esp_log_level_set("AUDIO_EVT", ESP_LOG_VERBOSE);
-    esp_log_level_set("AUDIO_PIPELINE", ESP_LOG_VERBOSE);
-    esp_log_level_set("FATFS_STREAM", ESP_LOG_VERBOSE);
-    esp_log_level_set(TAG, ESP_LOG_INFO);
+    //esp_log_level_set("MP3_DECODER", ESP_LOG_VERBOSE);
+    //esp_log_level_set("AUDIO_EVT", ESP_LOG_VERBOSE);
+    //esp_log_level_set("AUDIO_PIPELINE", ESP_LOG_VERBOSE);
+    //esp_log_level_set("FATFS_STREAM", ESP_LOG_VERBOSE);
+    //esp_log_level_set(TAG, ESP_LOG_INFO);
     nimBLE_init();
     ledc_motor_init();
 
@@ -871,6 +889,22 @@ void app_main(void)
     ESP_LOGW(TAG, "      [Vol-] or [Vol+] to adjust volume.");
 
     hummit_button_init(5);
+
+    //supply_enable 3.3V DEV (Supply Amplifier, vibro, sdcard)////////////////////////////////////////////////
+    // Configure the GPIO pin as a push/pull output
+    gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_INTR_DISABLE; // Disable the interrupt
+    io_conf.mode = GPIO_MODE_OUTPUT;       // Set as output mode
+    io_conf.pin_bit_mask = (1ULL << GPIO_NUM_7); // Bit mask of the pin
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // Disable pull-down mode
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;     // Disable pull-up mode
+
+    // Configure GPIO with the given settings
+    gpio_config(&io_conf);
+
+    // Set the GPIO pin to HIGH
+    gpio_set_level(GPIO_NUM_7, 1);
+    /////////////////////////////////////////////////////////////////////
 
     /*
     ESP_LOGI(TAG, "[ * ] [Play] input key event");
